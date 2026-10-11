@@ -39,4 +39,3 @@ jobs:
         run: |
           tag="android-${GITHUB_RUN_NUMBER}"
           gh release create "$tag" RECEITAS-ONCA.apk --target "$GITHUB_SHA" --title 'RECEITAS ONÇA · Android' --notes 'APK de teste para Android 8 ou superior. Dados locais. Não migra automaticamente receitas do navegador. Assinado com chave de depuração; futuras versões podem exigir migração por mudança de assinatura.'
-
