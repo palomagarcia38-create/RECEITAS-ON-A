@@ -1,0 +1,10 @@
+<resources>
+ <item type="id" name="recipe_name"/>
+ <item type="id" name="recipe_time"/>
+ <item type="id" name="recipe_yield"/>
+ <item type="id" name="recipe_ingredients"/>
+ <item type="id" name="recipe_steps"/>
+ <item type="id" name="recipe_notes"/>
+ <item type="id" name="owner_carmela"/>
+ <item type="id" name="owner_user"/>
+</resources>

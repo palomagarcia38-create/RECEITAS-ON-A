@@ -27,6 +27,11 @@ jobs:
       - name: Compilar APK
         working-directory: android
         run: gradle :app:assembleRelease :app:lintRelease --no-daemon --stacktrace
+      - name: Relatório de validação
+        if: always()
+        run: |
+          report="android/app/build/intermediates/lint_intermediate_text_report/release/lintReportRelease/lint-results-release.txt"
+          if [ -f "$report" ]; then cat "$report"; fi
       - name: Assinar com chave fixa
         id: signing
         env:
