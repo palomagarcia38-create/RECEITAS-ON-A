@@ -26,16 +26,47 @@ jobs:
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compilar APK
         working-directory: android
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
-      - name: Preparar arquivo instalável
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk RECEITAS-ONCA.apk
+        run: gradle :app:assembleRelease :app:lintRelease --no-daemon --stacktrace
+      - name: Assinar com chave fixa
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo 'Chave fixa pendente: configure ANDROID_KEYSTORE_BASE64 em Settings > Secrets > Actions.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          umask 077
+          signing_file="$RUNNER_TEMP/receitas-onca.jks"
+          trap 'rm -f "$signing_file"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_file"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$signing_file" --ks-key-alias receitas-onca --ks-pass pass:android --key-pass pass:android --out RECEITAS-ONCA.apk android/app/build/outputs/apk/release/app-release-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose RECEITAS-ONCA.apk
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - name: Gerar informações de atualização
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          RELEASE_TAG: android-${{ github.run_number }}
+        run: |
+          python - <<'PY'
+          import hashlib,json,os,re
+          from pathlib import Path
+          config=Path('android/app/build.gradle').read_text()
+          metadata={'packageId':'br.com.mariacarmela.receitas','versionCode':int(re.search(r'versionCode\s+(\d+)',config)[1]),'versionName':re.search(r"versionName\s+'([^']+)'",config)[1],'sha256':hashlib.sha256(Path('RECEITAS-ONCA.apk').read_bytes()).hexdigest(),'apkUrl':f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['RELEASE_TAG']}/RECEITAS-ONCA.apk"}
+          Path('update.json').write_text(json.dumps(metadata))
+          PY
       - uses: actions/upload-artifact@v4
+        if: steps.signing.outputs.ready == 'true'
         with:
           name: RECEITAS-ONCA-Android
-          path: RECEITAS-ONCA.apk
-      - name: Disponibilizar download
+          path: |
+            RECEITAS-ONCA.apk
+            update.json
+      - name: Disponibilizar atualização
+        if: steps.signing.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="android-${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" RECEITAS-ONCA.apk --target "$GITHUB_SHA" --title 'RECEITAS ONÇA · Android' --notes 'APK de teste para Android 8 ou superior. Dados locais. Não migra automaticamente receitas do navegador. Assinado com chave de depuração; futuras versões podem exigir migração por mudança de assinatura.'
+          gh release create "$tag" RECEITAS-ONCA.apk update.json --target "$GITHUB_SHA" --title 'RECEITAS ONÇA · Android' --notes 'Verificação automática de atualizações ao abrir o app. Download dentro do app e instalação confirmada pelo Android. Assinatura fixa: próximas versões com a mesma chave preservam as receitas. Versões antigas com assinatura de teste exigem migração; não desinstale se tiver receitas salvas.'
