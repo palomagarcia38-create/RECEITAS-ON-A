@@ -58,7 +58,7 @@ jobs:
           import hashlib,json,os,re
           from pathlib import Path
           config=Path('android/app/build.gradle').read_text()
-          metadata={'packageId':'br.com.mariacarmela.receitas','versionCode':int(re.search(r'versionCode\s+(\d+)',config)[1]),'versionName':re.search(r"versionName\s+'([^']+)'",config)[1],'sha256':hashlib.sha256(Path('RECEITAS-ONCA.apk').read_bytes()).hexdigest(),'apkUrl':f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['RELEASE_TAG']}/RECEITAS-ONCA.apk"}
+          metadata={'packageId':re.search(r"applicationId\s+'([^']+)'",config)[1],'versionCode':int(re.search(r'versionCode\s+(\d+)',config)[1]),'versionName':re.search(r"versionName\s+'([^']+)'",config)[1],'sha256':hashlib.sha256(Path('RECEITAS-ONCA.apk').read_bytes()).hexdigest(),'apkUrl':f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['RELEASE_TAG']}/RECEITAS-ONCA.apk"}
           Path('update.json').write_text(json.dumps(metadata))
           PY
       - uses: actions/upload-artifact@v4

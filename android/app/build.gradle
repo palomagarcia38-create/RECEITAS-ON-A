@@ -3,11 +3,11 @@ android {
     namespace 'br.com.mariacarmela.receitas'
     compileSdk 35
     defaultConfig {
-        applicationId 'br.com.mariacarmela.receitas'
+        applicationId 'br.com.mariacarmela.receitas.onca'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName '1.5'
+        versionCode 7
+        versionName '1.5.1'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }

@@ -9,3 +9,5 @@ Configuração única: Settings > Secrets and variables > Actions > New reposito
 APKs antigos tinham uma assinatura de depuração criada em cada execução, sem cópia persistida. Não é possível garantir uma atualização direta desses APKs com a nova chave. Não desinstalar uma versão antiga com receitas pessoais sem fazer uma migração/backup primeiro. A atualização com preservação de dados funciona entre versões assinadas com a nova chave fixa.
 
 Validação disponível: compilação e Android lint no GitHub Actions. Ainda falta teste em aparelho: negar/permitir instalação, sem rede, falha de download, assinatura inválida, atualizar entre dois APKs assinados com a mesma chave e conferir SQLite e fotos após a atualização. As receitas locais não são sincronizadas pelo atualizador.
+
+Versão 1.5.1: applicationId br.com.mariacarmela.receitas.onca para instalar ao lado das versões antigas, sem desinstalar nem acessar os dados delas. O nome no launcher é RECEITAS ONÇA (novo). O livro da Carmela é incluído; receitas pessoais da instalação anterior não são copiadas automaticamente. O provider usa ${applicationId} para evitar conflito entre instalações.
