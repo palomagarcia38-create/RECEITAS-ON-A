@@ -9,7 +9,7 @@ import android.widget.Toast;
 import org.json.*;
 import java.io.*;
 import java.net.*;
-import java.security.*;
+import java.security.MessageDigest;
 import java.util.*;
 
 final class AppUpdater {
