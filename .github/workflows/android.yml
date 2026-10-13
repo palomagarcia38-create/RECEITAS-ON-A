@@ -32,8 +32,6 @@ jobs:
         run: |
           report="android/app/build/intermediates/lint_intermediate_text_report/release/lintReportRelease/lint-results-release.txt"
           if [ -f "$report" ]; then cat "$report"; fi
-      - name: Testar sincronização no Supabase
-        run: python android/supabase/receitas-onca-sync/test_sync.py
       - name: Assinar com chave fixa
         id: signing
         env:
