@@ -29,6 +29,8 @@ jobs:
           mkdir -p /tmp/onca-search-tests
           javac -d /tmp/onca-search-tests android/app/src/main/java/br/com/mariacarmela/receitas/IngredientMatcher.java android/tests/IngredientMatcherTest.java
           java -cp /tmp/onca-search-tests br.com.mariacarmela.receitas.IngredientMatcherTest
+      - name: Validar entrada automática e edição compartilhada
+        run: python android/tests/test_auto_sync.py
       - name: Compilar APK
         working-directory: android
         run: gradle :app:assembleRelease :app:lintRelease --no-daemon --stacktrace
