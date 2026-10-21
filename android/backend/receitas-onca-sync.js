@@ -1,0 +1,41 @@
+
+const base=Deno.env.get('SUPABASE_URL'),key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),bucket='receitas-onca-images';
+const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type,x-onca-session','Access-Control-Allow-Methods':'GET,POST,PUT,OPTIONS'};
+const json=(b,s=200)=>new Response(JSON.stringify(b),{status:s,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
+const hash=async(v)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v))),b=>b.toString(16).padStart(2,'0')).join('');
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function db(p,m='GET',b){const r=await fetch(base+'/rest/v1/'+p,{method:m,headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json',Prefer:'return=representation'},body:b===undefined?undefined:JSON.stringify(b)});if(!r.ok)throw Error('db:'+r.status);return r.status===204?[]:await r.json();}
+async function sign(p){if(!p)return '';const r=await fetch(base+'/storage/v1/object/sign/'+bucket+'/'+p,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:3600})});if(!r.ok)throw Error('storage-sign');const b=await r.json();return base+'/storage/v1'+b.signedURL;}
+export async function handle(req){if(req.method==='OPTIONS')return new Response('ok',{headers:cors});try{const u=new URL(req.url),action=u.searchParams.get('action')||'recipes';
+
+if(action==='auto-join'&&req.method==='POST'){
+ const raw=await req.text();if(raw.length>512)return json({error:'Pedido inválido'},400);
+ const b=raw?JSON.parse(raw):{};
+ const books=await db('receitas_onca_books?name=eq.'+encodeURIComponent('Livro da Carmela')+'&select=id,name&limit=1');
+ if(!books.length)return json({error:'Livro indisponível no momento.'},503);
+ const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
+ const devices=await db('receitas_onca_devices','POST',{book_id:books[0].id,token_hash:await hash(token),name:String(b.name||'Celular').slice(0,80)});
+ return json({token,bookId:books[0].id,bookName:books[0].name,deviceId:devices[0].id});
+}
+if(action==='join'&&req.method==='POST'){const raw=await req.text();if(raw.length>512)return json({error:'Pedido inválido'},400);const b=JSON.parse(raw),code=String(b.code||'').trim().toUpperCase();if(!/^ONCA-[0-9A-F]{16}$/.test(code))return json({error:'Código do livro inválido.'},401);const books=await db('receitas_onca_books?code_hash=eq.'+await hash(code)+'&select=id,name');if(!books.length)return json({error:'Código do livro inválido.'},401);const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');const devices=await db('receitas_onca_devices','POST',{book_id:books[0].id,token_hash:await hash(token),name:String(b.name||'Celular').slice(0,80)});return json({token,bookId:books[0].id,bookName:books[0].name,deviceId:devices[0].id});}
+const token=req.headers.get('x-onca-session')||'';if(!/^[a-f0-9]{64}$/.test(token))return json({error:'Entre com o código do livro.'},401);const devices=await db('receitas_onca_devices?token_hash=eq.'+await hash(token)+'&revoked=eq.false&select=id,book_id');if(!devices.length)return json({error:'Conexão revogada.'},401);const device=devices[0],book=device.book_id;
+if(action==='media'&&req.method==='POST'){if(req.headers.get('content-type')!=='image/jpeg')return json({error:'Envie uma imagem JPEG.'},400);const bytes=await req.arrayBuffer();if(!bytes.byteLength||bytes.byteLength>8388608)return json({error:'Imagem deve ter até 8 MB.'},413);const path=book+'/'+device.id+'/'+crypto.randomUUID()+'.jpg';const r=await fetch(base+'/storage/v1/object/'+bucket+'/'+path,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'image/jpeg','x-upsert':'false'},body:bytes});if(!r.ok)throw Error('storage-upload');return json({path});}
+if(action==='logout'&&req.method==='POST'){await db('receitas_onca_devices?id=eq.'+device.id,'PATCH',{revoked:true});return json({loggedOut:true});}
+if(action==='collections'){
+ if(req.method==='GET')return json({collections:await db('receitas_onca_collections?book_id=eq.'+book+'&select=name&order=name')});
+ if(req.method==='POST'){const raw=await req.text();if(raw.length>512)return json({error:'Nome inválido'},400);const b=JSON.parse(raw);if(typeof b.name!=='string'||b.name.trim().length<2||b.name.length>60)return json({error:'Nome inválido'},400);const name=b.name.trim().replace(/\s+/g,' ');try{await db('receitas_onca_collections','POST',{book_id:book,name});}catch(e){if(!String(e).includes('db:409'))throw e;}return json({name});}
+ return json({error:'Método inválido'},405);
+}
+if(action!=='recipes')return json({error:'Ação inválida'},404);
+if(req.method==='GET'){const offset=Number(u.searchParams.get('offset')||0);if(!Number.isSafeInteger(offset)||offset<0)return json({error:'Página inválida'},400);const rows=await db('receitas_onca_recipes?book_id=eq.'+book+'&order=id.asc&limit=100&offset='+offset);const recipes=await Promise.all(rows.map(async r=>({...r,photoUrl:r.deleted?'':await sign(r.body.photo||''),stepUrls:r.deleted?[]:await Promise.all((r.body.step_photos||[]).map(sign))})));return json({recipes,more:rows.length===100});}
+if(req.method==='PUT'){const raw=await req.text();if(raw.length>131072)return json({error:'Receita muito grande'},413);const b=JSON.parse(raw);if(!uuid.test(b.id)||!Number.isSafeInteger(b.version)||b.version<0)return json({error:'Receita inválida'},400);const body=b.body;if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'Conteúdo inválido'},400);const clean={};for(const field of ['name','category','origin','time','yield','ingredients','steps','notes','photo']){if(typeof body[field]!=='string'||body[field].length>30000)return json({error:'Campo inválido: '+field},400);clean[field]=body[field];}if(!clean.name.trim()||!clean.ingredients.trim()||!clean.steps.trim()||!['carmela','user'].includes(clean.origin))return json({error:'Preencha nome, ingredientes e preparo'},400);if(!Array.isArray(body.step_photos)||body.step_photos.length>100||body.step_photos.some(p=>typeof p!=='string'))return json({error:'Fotos inválidas'},400);clean.step_photos=body.step_photos;clean.favorite=body.favorite===1?1:0;for(const path of [clean.photo,...clean.step_photos])if(path&&(!path.startsWith(book+'/')||path.includes('..')||!/^[-a-zA-Z0-9/_.]+$/.test(path)))return json({error:'Foto de outro livro'},403);
+if(body.collection!==undefined&&(typeof body.collection!=='string'||body.collection.trim().length<2||body.collection.length>60))return json({error:'Livro inválido'},400);
+let collection=body.collection;
+if(collection===undefined&&b.version>0){const previous=await db('receitas_onca_recipes?book_id=eq.'+book+'&id=eq.'+b.id+'&select=body');collection=previous[0]?.body?.collection;}
+clean.collection=collection|| (clean.origin==='carmela'?'Livro da Carmela':'Outros');clean.origin=clean.collection==='Livro da Carmela'?'carmela':'user';
+try{await db('receitas_onca_collections','POST',{book_id:book,name:clean.collection});}catch(e){if(!String(e).includes('db:409'))throw e;}
+if(b.version===0){try{const rows=await db('receitas_onca_recipes','POST',{book_id:book,id:b.id,body:clean,version:1,deleted:b.deleted===true});return json({version:rows[0].version});}catch(e){if(String(e).includes('db:409'))return json({error:'Receita alterada em outro celular'},409);throw e;}}
+const rows=await db('receitas_onca_recipes?book_id=eq.'+book+'&id=eq.'+b.id+'&version=eq.'+b.version,'PATCH',{body:clean,version:b.version+1,deleted:b.deleted===true,updated_at:new Date().toISOString()});if(!rows.length)return json({error:'Receita alterada em outro celular'},409);return json({version:rows[0].version});}
+return json({error:'Método inválido'},405);
+}catch(e){console.error('onca-sync',String(e));return json({error:'Não foi possível sincronizar agora.'},500);}}
+Deno.serve(handle);
