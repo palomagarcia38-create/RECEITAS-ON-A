@@ -13,14 +13,18 @@ assert a["bookId"]==b["bookId"] and a["token"]!=b["token"]
 s,data=call("recipes",token=a["token"]);assert s==200,(s,data.get("error"))
 names={r["body"]["name"] for r in data["recipes"] if not r["deleted"]}
 assert {"Bolo de fubá","Bombocado","Bolo de areia","Pudim de padaria","Torta de ricota","Maria-mole","Manjar branco"}.issubset(names),names
-recipe={"name":"Verificação automática (não publicada)","category":"Doces","origin":"carmela","time":"","yield":"","ingredients":"1 ingrediente de teste","steps":"1 etapa de teste","notes":"Registro de teste oculto, criado já como excluído.","photo":"","step_photos":[],"favorite":0}
+for session in (a["token"],b["token"]):
+    s,data=call("collections","POST",{"name":"Livro Laura"},session);assert s==200,(s,data)
+s,data=call("collections",token=b["token"]);assert s==200
+assert {"Livro da Carmela","Livro Laura","Livro Paloma","Outros"}.issubset({x["name"] for x in data["collections"]})
+recipe={"collection":"Livro Laura","name":"Verificação automática (não publicada)","category":"Doces","origin":"carmela","time":"","yield":"","ingredients":"1 ingrediente de teste","steps":"1 etapa de teste","notes":"Registro de teste oculto, criado já como excluído.","photo":"","step_photos":[],"favorite":0}
 rid=str(uuid.uuid4())
 s,data=call("recipes","PUT",{"id":rid,"version":0,"body":recipe,"deleted":True},a["token"]);assert s==200 and data["version"]==1,(s,data)
-recipe["notes"]="Edição autorizada no segundo aparelho de teste."
+del recipe["collection"] # Simula edição por uma versão antiga do app\nrecipe["notes"]="Edição autorizada no segundo aparelho de teste."
 s,data=call("recipes","PUT",{"id":rid,"version":1,"body":recipe,"deleted":True},b["token"]);assert s==200 and data["version"]==2,(s,data)
 s,data=call("recipes",token=a["token"]);assert s==200
 row=next(r for r in data["recipes"] if r["id"]==rid)
-assert row["deleted"] and row["version"]==2 and row["body"]["notes"]==recipe["notes"]
+assert row["body"]["collection"]=="Livro Laura" and row["body"]["origin"]=="user"\nprint("PASS: livros compartilhados e associação preservada na edição por app antigo")\nassert row["deleted"] and row["version"]==2 and row["body"]["notes"]==recipe["notes"]
 assert call("recipes")[0]==401
 print("PASS: entrada sem código, duas sessões automáticas, sete receitas e edição compartilhada sem publicar registros de teste")
 
