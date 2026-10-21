@@ -20,11 +20,14 @@ assert {"Livro da Carmela","Livro Laura","Livro Paloma","Outros"}.issubset({x["n
 recipe={"collection":"Livro Laura","name":"Verificação automática (não publicada)","category":"Doces","origin":"carmela","time":"","yield":"","ingredients":"1 ingrediente de teste","steps":"1 etapa de teste","notes":"Registro de teste oculto, criado já como excluído.","photo":"","step_photos":[],"favorite":0}
 rid=str(uuid.uuid4())
 s,data=call("recipes","PUT",{"id":rid,"version":0,"body":recipe,"deleted":True},a["token"]);assert s==200 and data["version"]==1,(s,data)
-del recipe["collection"] # Simula edição por uma versão antiga do app\nrecipe["notes"]="Edição autorizada no segundo aparelho de teste."
+del recipe["collection"] # Simula edição por uma versão antiga do app
+recipe["notes"]="Edição autorizada no segundo aparelho de teste."
 s,data=call("recipes","PUT",{"id":rid,"version":1,"body":recipe,"deleted":True},b["token"]);assert s==200 and data["version"]==2,(s,data)
 s,data=call("recipes",token=a["token"]);assert s==200
 row=next(r for r in data["recipes"] if r["id"]==rid)
-assert row["body"]["collection"]=="Livro Laura" and row["body"]["origin"]=="user"\nprint("PASS: livros compartilhados e associação preservada na edição por app antigo")\nassert row["deleted"] and row["version"]==2 and row["body"]["notes"]==recipe["notes"]
+assert row["body"]["collection"]=="Livro Laura" and row["body"]["origin"]=="user"
+print("PASS: livros compartilhados e associação preservada na edição por app antigo")
+assert row["deleted"] and row["version"]==2 and row["body"]["notes"]==recipe["notes"]
 assert call("recipes")[0]==401
 print("PASS: entrada sem código, duas sessões automáticas, sete receitas e edição compartilhada sem publicar registros de teste")
 
